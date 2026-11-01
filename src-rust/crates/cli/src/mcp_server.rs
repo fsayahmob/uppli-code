@@ -83,6 +83,8 @@ pub struct McpServerState {
     /// True while a query is running on this state. Rejects concurrent
     /// `uppli_query` calls with a busy error.
     pub busy: Arc<std::sync::atomic::AtomicBool>,
+    /// External MCP servers from `--mcp-config`, offered to the inner agent.
+    pub mcp_manager: Option<Arc<cc_mcp::McpManager>>,
 }
 
 /// Per-connection context. Bundles the shared state with a
@@ -439,13 +441,14 @@ async fn tool_query(conn: &Conn, args: &Value) -> Result<Value, JsonRpcError> {
         file_history,
         current_turn: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
         non_interactive: true,
-        mcp_manager: None,
+        mcp_manager: state.mcp_manager.clone(),
         config: state.config.clone(),
     };
 
     let tools: Vec<Box<dyn cc_tools::Tool>> = cc_tools::all_tools()
         .into_iter()
         .filter(|t| t.name() != cc_core::constants::TOOL_NAME_AGENT)
+        .chain(crate::mcp_tool_wrappers(state.mcp_manager.as_ref()))
         .collect();
 
     let caps = state.provider.capabilities();

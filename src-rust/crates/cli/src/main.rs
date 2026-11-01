@@ -1806,6 +1806,7 @@ async fn main() -> anyhow::Result<()> {
                 &cost_tracker,
                 cli.max_turns,
                 cli.model.clone(),
+                mcp_manager_arc.clone(),
             );
             mcp_server::run_mcp_server(mcp_state).await
         }
@@ -1818,6 +1819,7 @@ async fn main() -> anyhow::Result<()> {
                 &cost_tracker,
                 cli.max_turns,
                 cli.model.clone(),
+                None, // the --groom peer stays read-only: no external tools
             );
             mcp_server::run_mcp_server_unix(mcp_state, sock).await
         }
@@ -1970,6 +1972,7 @@ fn build_mcp_state(
     cost_tracker: &Arc<CostTracker>,
     max_turns: u32,
     model_override: Option<String>,
+    mcp_manager: Option<Arc<cc_mcp::McpManager>>,
 ) -> mcp_server::McpServerState {
     mcp_server::McpServerState {
         provider,
@@ -1980,6 +1983,7 @@ fn build_mcp_state(
         max_turns,
         model_override,
         busy: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        mcp_manager,
     }
 }
 
@@ -2002,20 +2006,29 @@ fn build_tools_with_mcp(
 ) -> Arc<Vec<Box<dyn cc_tools::Tool>>> {
     let mut v: Vec<Box<dyn cc_tools::Tool>> = cc_tools::all_tools();
     v.push(Box::new(cc_query::AgentTool));
+    v.extend(mcp_tool_wrappers(mcp_manager.as_ref()));
+    debug!(total_tools = v.len(), "MCP tools registered");
 
-    if let Some(ref manager_arc) = mcp_manager {
-        for (server_name, tool_def) in manager_arc.all_tool_definitions() {
-            let wrapper = McpToolWrapper {
+    Arc::new(v)
+}
+
+fn mcp_tool_wrappers(
+    mcp_manager: Option<&Arc<cc_mcp::McpManager>>,
+) -> Vec<Box<dyn cc_tools::Tool>> {
+    let Some(manager_arc) = mcp_manager else {
+        return Vec::new();
+    };
+    manager_arc
+        .all_tool_definitions()
+        .into_iter()
+        .map(|(server_name, tool_def)| {
+            Box::new(McpToolWrapper {
                 tool_def,
                 server_name,
                 manager: manager_arc.clone(),
-            };
-            v.push(Box::new(wrapper));
-        }
-        debug!(total_tools = v.len(), "MCP tools registered");
-    }
-
-    Arc::new(v)
+            }) as Box<dyn cc_tools::Tool>
+        })
+        .collect()
 }
 
 // ---------------------------------------------------------------------------
