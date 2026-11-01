@@ -1,10 +1,25 @@
 // Embedding engine — wraps fastembed for local vector generation.
 
 use fastembed::{EmbeddingModel, InitOptions, TextEmbedding};
+use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 use tracing::info;
 
 static EMBEDDER: OnceLock<Mutex<TextEmbedding>> = OnceLock::new();
+
+/// Model cache path. fastembed defaults to a path relative to the working
+/// directory, which downloads the model again in every new folder.
+fn model_cache_dir() -> PathBuf {
+    std::env::var_os("FASTEMBED_CACHE_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            dirs::home_dir()
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join(".uppli")
+                .join("rag")
+                .join("models")
+        })
+}
 
 pub struct Embedder;
 
@@ -14,7 +29,9 @@ impl Embedder {
         EMBEDDER.get_or_init(|| {
             info!("Loading embedding model (all-MiniLM-L6-v2)...");
             let model = TextEmbedding::try_new(
-                InitOptions::new(EmbeddingModel::AllMiniLML6V2).with_show_download_progress(true),
+                InitOptions::new(EmbeddingModel::AllMiniLML6V2)
+                    .with_show_download_progress(true)
+                    .with_cache_dir(model_cache_dir()),
             )
             .expect("Failed to load embedding model");
             info!("Embedding model ready");
@@ -62,6 +79,11 @@ pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn model_cache_does_not_depend_on_working_directory() {
+        assert!(model_cache_dir().is_absolute());
+    }
 
     #[test]
     fn cosine_identical_vectors() {
