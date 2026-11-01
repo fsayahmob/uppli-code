@@ -1504,8 +1504,11 @@ async fn main() -> anyhow::Result<()> {
     // Store provider globally so sub-agents (AgentTool) can reuse it.
     cc_query::set_global_provider(Arc::clone(&client));
 
-    // Initialize the RAG embedding model (22MB, ~1s load).
-    cc_rag::Embedder::init();
+    // Initialize the RAG embedding model (~97MB download on first use). It is
+    // optional: without it, RAG searches return nothing and the agent still runs.
+    if let Err(e) = cc_rag::Embedder::init() {
+        warn!(error = %e, "Embedding model unavailable, RAG disabled");
+    }
 
     // Log active provider.
     info!(

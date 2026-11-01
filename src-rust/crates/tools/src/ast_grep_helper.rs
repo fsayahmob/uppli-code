@@ -67,7 +67,7 @@ impl Tool for AstGrepHelperTool {
 
         if !cc_rag::Embedder::is_ready() {
             return ToolResult::error(
-                "RAG not initialized. The embedding model is still loading.".to_string(),
+                "RAG not available: the embedding model is not loaded.".to_string(),
             );
         }
 

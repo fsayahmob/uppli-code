@@ -6,7 +6,7 @@ fn main() {
     tracing_subscriber::fmt::init();
 
     println!("Loading RAG...");
-    Embedder::init();
+    Embedder::init().expect("Failed to load embedding model");
     let store = VectorStore::load_default().expect("Load store");
     println!("Store: {} chunks\n", store.len());
 

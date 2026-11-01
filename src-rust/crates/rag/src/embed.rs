@@ -24,19 +24,22 @@ fn model_cache_dir() -> PathBuf {
 pub struct Embedder;
 
 impl Embedder {
-    /// Initialize the embedding model (downloads on first use, ~22MB).
-    pub fn init() {
-        EMBEDDER.get_or_init(|| {
-            info!("Loading embedding model (all-MiniLM-L6-v2)...");
-            let model = TextEmbedding::try_new(
-                InitOptions::new(EmbeddingModel::AllMiniLML6V2)
-                    .with_show_download_progress(true)
-                    .with_cache_dir(model_cache_dir()),
-            )
-            .expect("Failed to load embedding model");
-            info!("Embedding model ready");
-            Mutex::new(model)
-        });
+    /// Load the embedding model (downloads on first use, ~97MB). On failure the
+    /// embedder stays not ready and the next call tries again.
+    pub fn init() -> Result<(), String> {
+        if Self::is_ready() {
+            return Ok(());
+        }
+        info!("Loading embedding model (all-MiniLM-L6-v2)...");
+        let model = TextEmbedding::try_new(
+            InitOptions::new(EmbeddingModel::AllMiniLML6V2)
+                .with_show_download_progress(true)
+                .with_cache_dir(model_cache_dir()),
+        )
+        .map_err(|e| format!("{e:#}"))?;
+        let _ = EMBEDDER.set(Mutex::new(model));
+        info!("Embedding model ready");
+        Ok(())
     }
 
     /// Embed a single text string. Returns a 384-dim vector.
@@ -83,6 +86,18 @@ mod tests {
     #[test]
     fn model_cache_does_not_depend_on_working_directory() {
         assert!(model_cache_dir().is_absolute());
+    }
+
+    #[test]
+    fn init_reports_an_unreachable_model_instead_of_panicking() {
+        let cache = std::env::temp_dir().join(format!("cc-rag-no-model-{}", std::process::id()));
+        std::env::set_var("FASTEMBED_CACHE_DIR", &cache);
+        std::env::set_var("HF_ENDPOINT", "http://127.0.0.1:9");
+
+        assert!(Embedder::init().is_err());
+        assert!(!Embedder::is_ready());
+
+        let _ = std::fs::remove_dir_all(&cache);
     }
 
     #[test]
