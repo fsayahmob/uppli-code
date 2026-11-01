@@ -74,24 +74,7 @@ impl Tool for McpToolWrapper {
                 if result.is_error {
                     return ToolResult::error(text);
                 }
-                // Forward MCP images as blocks so vision providers actually receive them.
-                let images: Vec<cc_core::types::ContentBlock> = result
-                    .content
-                    .iter()
-                    .filter_map(|c| match c {
-                        cc_mcp::types::McpContent::Image { data, mime_type } => {
-                            Some(cc_core::types::ContentBlock::Image {
-                                source: cc_core::types::ImageSource {
-                                    source_type: "base64".to_string(),
-                                    media_type: Some(mime_type.clone()),
-                                    data: Some(data.clone()),
-                                    url: None,
-                                },
-                            })
-                        }
-                        _ => None,
-                    })
-                    .collect();
+                let images = cc_mcp::mcp_result_images(&result);
                 if images.is_empty() {
                     ToolResult::success(text)
                 } else {
