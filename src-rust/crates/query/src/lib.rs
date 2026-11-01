@@ -170,6 +170,8 @@ pub struct QueryConfig {
     /// history before older results are replaced with a truncation notice.
     /// Mirrors the TS `applyToolResultBudget` mechanism.  Default: 50_000.
     pub tool_result_budget: usize,
+    /// Messages kept after the initial prompt on each turn (0 = all).
+    pub history_window: usize,
     /// Optional effort level.  When set and `thinking_budget` is `None`,
     /// the effort level's `thinking_budget_tokens()` is used as the
     /// thinking budget.  Also provides a temperature override when the
@@ -259,6 +261,7 @@ impl Default for QueryConfig {
             thinking_budget: None,
             temperature: None,
             tool_result_budget: cc_core::constants::DEFAULT_TOOL_RESULT_BUDGET,
+            history_window: cc_core::constants::DEFAULT_HISTORY_WINDOW,
             effort_level: None,
             command_queue: None,
             skill_index: None,
@@ -297,6 +300,7 @@ impl QueryConfig {
             reactive_compact_threshold: cfg.effective_reactive_compact_threshold(),
             compact_summary_max_tokens: cfg.effective_compact_summary_max_tokens(),
             tool_result_budget: cfg.effective_tool_result_budget(),
+            history_window: cfg.effective_history_window(),
             max_compact_retries: cfg.effective_max_compact_retries(),
             autocompact_trigger_fraction: cfg.effective_autocompact_trigger_fraction(),
             compact_warning_buffer_tokens: cfg.effective_compact_warning_buffer_tokens(),
@@ -335,6 +339,7 @@ impl QueryConfig {
             reactive_compact_threshold: cfg.effective_reactive_compact_threshold(),
             compact_summary_max_tokens: cfg.effective_compact_summary_max_tokens(),
             tool_result_budget: cfg.effective_tool_result_budget(),
+            history_window: cfg.effective_history_window(),
             max_compact_retries: cfg.effective_max_compact_retries(),
             autocompact_trigger_fraction: cfg.effective_autocompact_trigger_fraction(),
             compact_warning_buffer_tokens: cfg.effective_compact_warning_buffer_tokens(),
@@ -544,6 +549,23 @@ fn total_tool_result_chars(messages: &[Message]) -> usize {
             }
         })
         .sum()
+}
+
+/// Drop everything but the initial prompt and the last `window` messages, so a
+/// perception-action loop does not resend its whole image history every turn.
+/// A tail starting on a tool_result grows back to include its tool_use, so the
+/// newest result always survives. Returns the number of messages dropped.
+fn apply_history_window(messages: &mut Vec<Message>, window: usize) -> usize {
+    if window == 0 || messages.len() <= window + 1 {
+        return 0;
+    }
+    let mut first_kept = messages.len() - window;
+    while first_kept > 1 && !messages[first_kept].get_tool_result_blocks().is_empty() {
+        first_kept -= 1;
+    }
+    let dropped = first_kept - 1;
+    messages.drain(1..first_kept);
+    dropped
 }
 
 /// When the cumulative tool-result content exceeds `budget` characters, walk
@@ -762,6 +784,15 @@ pub async fn run_query_loop(
                     messages.extend(tail);
                 }
             }
+        }
+
+        let dropped = apply_history_window(messages, config.history_window);
+        if dropped > 0 {
+            debug!(
+                dropped,
+                window = config.history_window,
+                "History window applied"
+            );
         }
 
         // Apply tool-result budget: if the cumulative size of all tool results
@@ -1904,6 +1935,71 @@ pub async fn run_single_query(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn tool_exchange(i: usize) -> [Message; 2] {
+        let id = format!("call_{i}");
+        [
+            Message::assistant_blocks(vec![ContentBlock::ToolUse {
+                id: id.clone(),
+                name: "agir".to_string(),
+                input: serde_json::json!({}),
+            }]),
+            Message::user_blocks(vec![ContentBlock::ToolResult {
+                tool_use_id: id,
+                content: ToolResultContent::Text("ok".to_string()),
+                is_error: None,
+            }]),
+        ]
+    }
+
+    fn history(exchanges: usize) -> Vec<Message> {
+        let mut messages = vec![Message::user("prompt".to_string())];
+        for i in 0..exchanges {
+            messages.extend(tool_exchange(i));
+        }
+        messages
+    }
+
+    #[test]
+    fn history_window_zero_keeps_everything() {
+        let mut messages = history(5);
+        assert_eq!(apply_history_window(&mut messages, 0), 0);
+        assert_eq!(messages.len(), 11);
+    }
+
+    #[test]
+    fn history_window_keeps_prompt_and_last_exchange() {
+        let mut messages = history(5);
+        assert_eq!(apply_history_window(&mut messages, 2), 8);
+        assert_eq!(messages.len(), 3);
+        assert_eq!(messages[0].role, cc_core::types::Role::User);
+        assert!(messages[1].get_tool_result_blocks().is_empty());
+        assert_eq!(messages[2].get_tool_result_blocks().len(), 1);
+    }
+
+    #[test]
+    fn history_window_never_starts_on_an_orphan_tool_result() {
+        let mut messages = history(5);
+        apply_history_window(&mut messages, 3);
+        assert!(messages[1].get_tool_result_blocks().is_empty());
+        assert_eq!(messages.len(), 5);
+    }
+
+    #[test]
+    fn history_window_of_one_keeps_the_newest_result() {
+        let mut messages = history(5);
+        apply_history_window(&mut messages, 1);
+        assert_eq!(messages.len(), 3);
+        assert!(messages[1].get_tool_result_blocks().is_empty());
+        assert_eq!(messages[2].get_tool_result_blocks().len(), 1);
+    }
+
+    #[test]
+    fn history_window_shorter_history_is_untouched() {
+        let mut messages = history(1);
+        assert_eq!(apply_history_window(&mut messages, 4), 0);
+        assert_eq!(messages.len(), 3);
+    }
     use cc_api::SystemPrompt;
 
     fn make_config(sys: Option<&str>, append: Option<&str>) -> QueryConfig {
@@ -1919,6 +2015,7 @@ mod tests {
             thinking_budget: None,
             temperature: None,
             tool_result_budget: 50_000,
+            history_window: 0,
             effort_level: None,
             command_queue: None,
             skill_index: None,

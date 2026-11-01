@@ -72,9 +72,13 @@ impl Tool for McpToolWrapper {
             Ok(result) => {
                 let text = cc_mcp::mcp_result_to_string(&result);
                 if result.is_error {
-                    ToolResult::error(text)
-                } else {
+                    return ToolResult::error(text);
+                }
+                let images = cc_mcp::mcp_result_images(&result);
+                if images.is_empty() {
                     ToolResult::success(text)
+                } else {
+                    ToolResult::success_with_blocks(text, images)
                 }
             }
             Err(e) => ToolResult::error(format!("MCP tool '{}' failed: {}", bare_name, e)),
@@ -497,6 +501,10 @@ struct Cli {
     /// Default `limit` used by Read when the caller omits it (lines).
     #[arg(long = "default-read-line-limit", value_name = "LINES")]
     default_read_line_limit: Option<usize>,
+
+    /// Minimum messages kept after the initial prompt on each turn (default: all).
+    #[arg(long = "history-window", value_name = "MESSAGES")]
+    history_window: Option<usize>,
 
     /// Max consecutive auto-compact failures before the circuit breaker
     /// disables auto-compact for the rest of the session.
@@ -1112,6 +1120,9 @@ async fn main() -> anyhow::Result<()> {
     if let Some(v) = cli.default_read_line_limit {
         config.default_read_line_limit = Some(v);
     }
+    if let Some(v) = cli.history_window {
+        config.history_window = Some(v);
+    }
     if let Some(v) = cli.max_compact_retries {
         config.max_compact_retries = Some(v);
     }
@@ -1504,8 +1515,11 @@ async fn main() -> anyhow::Result<()> {
     // Store provider globally so sub-agents (AgentTool) can reuse it.
     cc_query::set_global_provider(Arc::clone(&client));
 
-    // Initialize the RAG embedding model (22MB, ~1s load).
-    cc_rag::Embedder::init();
+    // Initialize the RAG embedding model (~97MB download on first use). It is
+    // optional: without it, RAG searches return nothing and the agent still runs.
+    if let Err(e) = cc_rag::Embedder::init() {
+        warn!(error = %e, "Embedding model unavailable, RAG disabled");
+    }
 
     // Log active provider.
     info!(
@@ -1782,6 +1796,7 @@ async fn main() -> anyhow::Result<()> {
                 &cost_tracker,
                 cli.max_turns,
                 cli.model.clone(),
+                mcp_manager_arc.clone(),
             );
             mcp_server::run_mcp_server(mcp_state).await
         }
@@ -1794,6 +1809,7 @@ async fn main() -> anyhow::Result<()> {
                 &cost_tracker,
                 cli.max_turns,
                 cli.model.clone(),
+                None, // the --groom peer stays read-only: no external tools
             );
             mcp_server::run_mcp_server_unix(mcp_state, sock).await
         }
@@ -1946,6 +1962,7 @@ fn build_mcp_state(
     cost_tracker: &Arc<CostTracker>,
     max_turns: u32,
     model_override: Option<String>,
+    mcp_manager: Option<Arc<cc_mcp::McpManager>>,
 ) -> mcp_server::McpServerState {
     mcp_server::McpServerState {
         provider,
@@ -1956,6 +1973,7 @@ fn build_mcp_state(
         max_turns,
         model_override,
         busy: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        mcp_manager,
     }
 }
 
@@ -1978,20 +1996,29 @@ fn build_tools_with_mcp(
 ) -> Arc<Vec<Box<dyn cc_tools::Tool>>> {
     let mut v: Vec<Box<dyn cc_tools::Tool>> = cc_tools::all_tools();
     v.push(Box::new(cc_query::AgentTool));
+    v.extend(mcp_tool_wrappers(mcp_manager.as_ref()));
+    debug!(total_tools = v.len(), "MCP tools registered");
 
-    if let Some(ref manager_arc) = mcp_manager {
-        for (server_name, tool_def) in manager_arc.all_tool_definitions() {
-            let wrapper = McpToolWrapper {
+    Arc::new(v)
+}
+
+fn mcp_tool_wrappers(
+    mcp_manager: Option<&Arc<cc_mcp::McpManager>>,
+) -> Vec<Box<dyn cc_tools::Tool>> {
+    let Some(manager_arc) = mcp_manager else {
+        return Vec::new();
+    };
+    manager_arc
+        .all_tool_definitions()
+        .into_iter()
+        .map(|(server_name, tool_def)| {
+            Box::new(McpToolWrapper {
                 tool_def,
                 server_name,
                 manager: manager_arc.clone(),
-            };
-            v.push(Box::new(wrapper));
-        }
-        debug!(total_tools = v.len(), "MCP tools registered");
-    }
-
-    Arc::new(v)
+            }) as Box<dyn cc_tools::Tool>
+        })
+        .collect()
 }
 
 // ---------------------------------------------------------------------------

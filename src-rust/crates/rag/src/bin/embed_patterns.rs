@@ -21,7 +21,7 @@ fn main() {
     println!("Loaded {} chunks", chunks.len());
 
     println!("Initializing embedder (downloads model on first run)...");
-    Embedder::init();
+    Embedder::init().expect("Failed to load embedding model");
 
     let mut store = VectorStore::new();
     store.add_chunks(chunks);

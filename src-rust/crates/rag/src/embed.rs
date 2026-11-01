@@ -1,25 +1,39 @@
 // Embedding engine — wraps fastembed for local vector generation.
 
 use fastembed::{EmbeddingModel, InitOptions, TextEmbedding};
+use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 use tracing::info;
 
 static EMBEDDER: OnceLock<Mutex<TextEmbedding>> = OnceLock::new();
 
+/// Model cache path. fastembed defaults to a path relative to the working
+/// directory, which downloads the model again in every new folder.
+fn model_cache_dir() -> PathBuf {
+    std::env::var_os("FASTEMBED_CACHE_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| crate::store::rag_dir().join("models"))
+}
+
 pub struct Embedder;
 
 impl Embedder {
-    /// Initialize the embedding model (downloads on first use, ~22MB).
-    pub fn init() {
-        EMBEDDER.get_or_init(|| {
-            info!("Loading embedding model (all-MiniLM-L6-v2)...");
-            let model = TextEmbedding::try_new(
-                InitOptions::new(EmbeddingModel::AllMiniLML6V2).with_show_download_progress(true),
-            )
-            .expect("Failed to load embedding model");
-            info!("Embedding model ready");
-            Mutex::new(model)
-        });
+    /// Load the embedding model (downloads on first use, ~97MB). On failure the
+    /// embedder stays not ready and the next call tries again.
+    pub fn init() -> Result<(), String> {
+        if Self::is_ready() {
+            return Ok(());
+        }
+        info!("Loading embedding model (all-MiniLM-L6-v2)...");
+        let model = TextEmbedding::try_new(
+            InitOptions::new(EmbeddingModel::AllMiniLML6V2)
+                .with_show_download_progress(true)
+                .with_cache_dir(model_cache_dir()),
+        )
+        .map_err(|e| format!("{e:#}"))?;
+        let _ = EMBEDDER.set(Mutex::new(model));
+        info!("Embedding model ready");
+        Ok(())
     }
 
     /// Embed a single text string. Returns a 384-dim vector.
@@ -62,6 +76,38 @@ pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn model_cache_does_not_depend_on_working_directory() {
+        assert!(model_cache_dir().is_absolute());
+    }
+
+    #[test]
+    fn init_reports_an_unreachable_model_instead_of_panicking() {
+        let cache = std::env::temp_dir().join(format!("cc-rag-no-model-{}", std::process::id()));
+        let orig_cache = std::env::var_os("FASTEMBED_CACHE_DIR");
+        let orig_endpoint = std::env::var_os("HF_ENDPOINT");
+        std::env::set_var("FASTEMBED_CACHE_DIR", &cache);
+        std::env::set_var("HF_ENDPOINT", "http://127.0.0.1:9");
+
+        let result = Embedder::init();
+        let ready = Embedder::is_ready();
+
+        // Restore env vars
+        for (key, orig) in [
+            ("FASTEMBED_CACHE_DIR", orig_cache),
+            ("HF_ENDPOINT", orig_endpoint),
+        ] {
+            match orig {
+                Some(value) => std::env::set_var(key, value),
+                None => std::env::remove_var(key),
+            }
+        }
+        let _ = std::fs::remove_dir_all(&cache);
+
+        assert!(result.is_err());
+        assert!(!ready);
+    }
 
     #[test]
     fn cosine_identical_vectors() {

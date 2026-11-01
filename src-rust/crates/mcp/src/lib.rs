@@ -15,7 +15,7 @@
 
 use async_trait::async_trait;
 use cc_core::config::{McpServerConfig, McpTransportType};
-use cc_core::types::ToolDefinition;
+use cc_core::types::{ContentBlock, ImageSource, ToolDefinition};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -1499,6 +1499,26 @@ pub fn mcp_result_to_string(result: &CallToolResult) -> String {
     parts.join("\n")
 }
 
+/// The images of an MCP tool result as content blocks. `mcp_result_to_string`
+/// only describes them, so vision providers need these to actually see them.
+pub fn mcp_result_images(result: &CallToolResult) -> Vec<ContentBlock> {
+    result
+        .content
+        .iter()
+        .filter_map(|c| match c {
+            McpContent::Image { data, mime_type } => Some(ContentBlock::Image {
+                source: ImageSource {
+                    source_type: "base64".to_string(),
+                    media_type: Some(mime_type.clone()),
+                    data: Some(data.clone()),
+                    url: None,
+                },
+            }),
+            _ => None,
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1621,6 +1641,29 @@ mod tests {
         assert!(s.contains("Image:"));
         assert!(s.contains("image/png"));
         assert!(s.contains("abc123"));
+    }
+
+    #[test]
+    fn test_result_images_keeps_only_images() {
+        let result = CallToolResult {
+            content: vec![
+                McpContent::Text {
+                    text: "caption".to_string(),
+                },
+                McpContent::Image {
+                    data: "abc123".to_string(),
+                    mime_type: "image/png".to_string(),
+                },
+            ],
+            is_error: false,
+        };
+        let images = mcp_result_images(&result);
+        assert_eq!(images.len(), 1);
+        let ContentBlock::Image { source } = &images[0] else {
+            panic!("expected an image block");
+        };
+        assert_eq!(source.data.as_deref(), Some("abc123"));
+        assert_eq!(source.media_type.as_deref(), Some("image/png"));
     }
 
     #[test]

@@ -4,6 +4,15 @@ All notable changes to uppli-code are documented in this file.
 
 ## Unreleased
 
+### Reflex models: vision models that answer each image with a tool call
+
+- **New `reflex` preset** for a local OpenAI-compatible server. The server is not part of this repository.
+- **MCP tool images now reach vision providers.** `McpToolWrapper` only described them as text. It now also forwards them as image blocks, through `cc_mcp::mcp_result_images`.
+- **`--mcp-server` offers `--mcp-config` tools to its agent.** The `--groom` peer still gets none.
+- **New `--history-window` / `history_window`** keeps the prompt and the last N messages on each turn. Off by default. Dropped messages are gone from the session, not only from the request.
+- **Embedding model cached in `~/.uppli/rag/models`** instead of the working directory, which downloaded 97 MB per folder. `FASTEMBED_CACHE_DIR` still overrides it.
+- **A failed embedding model load no longer panics at startup.** The CLI logs a warning and RAG stays off.
+
 ### Architecture: thinking dialect declared per-provider, budget unified on EffortLevel (PR D)
 
 User directive: **"on peut virer tt ces histoire de budget ca me soule, ca introduit des erreurs et des paramètres en plus"** + **"je veux qu'on respecte tout ce que offre l'anthropic api ou openAI api — c'est la garantie que le provider sera compatible avec le LLM."** PR D collapses thinking infrastructure from two duplicated knobs into one wire-dialect declaration per provider.

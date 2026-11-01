@@ -7,7 +7,7 @@
 //   - Chunks are stored as JSON + pre-computed embeddings in ~/.uppli/rag/
 //   - At startup, embeddings are loaded into memory (Vec<f32>)
 //   - Search = embed query → cosine similarity → top-K
-//   - Model downloads automatically on first use (~22MB)
+//   - Model downloads automatically on first use (~97MB) to ~/.uppli/rag/models
 
 pub mod embed;
 pub mod store;

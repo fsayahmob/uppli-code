@@ -1,0 +1,45 @@
+schema_version = 1
+
+[provider]
+name = "reflex"
+aliases = ["reflexe"]
+display_name = "Reflex"
+description = "Local reflex models: NoMaD, Pixels2Play (no key)"
+attribution = "powered by a local reflex model"
+provider_type = "openai_compat"
+api_format = "openai"
+api_base = "http://127.0.0.1:8770/v1"
+supports_vision = true
+
+[auth]
+env_vars = []
+keychain_key = "reflex"
+display_label = "Reflex"
+required = false
+
+[defaults]
+max_tokens = 1024
+request_timeout_sec = 30
+max_retries = 0
+
+# ── Models ────────────────────────────
+# Reflex models receive an image and return a tool call, writing no text. The
+# OpenAI-compatible server is not part of this repository: --api-base points at
+# it, and it decides what each id means. No pricing: local inference is free.
+
+[[models]]
+id = "nomad"
+display_name = "NoMaD"
+description = "Camera exploration model"
+context_window = 128000
+max_output_tokens = 1024
+supports_thinking = false
+default = true
+
+[[models]]
+id = "p2p"
+display_name = "Pixels2Play 150M"
+description = "Video-game playing model"
+context_window = 128000
+max_output_tokens = 1024
+supports_thinking = false

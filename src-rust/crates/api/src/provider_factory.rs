@@ -264,6 +264,7 @@ mod tests {
         assert!(find_preset("openai").is_some());
         assert!(find_preset("glm").is_some());
         assert!(find_preset("zhipu").is_some());
+        assert!(find_preset("reflex").is_some());
         assert!(find_preset("unknown").is_none());
     }
 

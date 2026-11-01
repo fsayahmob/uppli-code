@@ -273,13 +273,17 @@ pub fn format_results(results: &[SearchResult]) -> String {
     out
 }
 
-/// Default store path.
-pub fn default_store_path() -> PathBuf {
+/// Directory holding the vector store and the embedding model.
+pub(crate) fn rag_dir() -> PathBuf {
     dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join(".uppli")
         .join("rag")
-        .join("vector_store.json")
+}
+
+/// Default store path.
+pub fn default_store_path() -> PathBuf {
+    rag_dir().join("vector_store.json")
 }
 
 #[cfg(test)]
