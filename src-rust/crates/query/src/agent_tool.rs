@@ -187,6 +187,7 @@ impl Tool for AgentTool {
             thinking_budget: None,
             temperature: None,
             tool_result_budget: ctx.config.effective_tool_result_budget(),
+            history_window: ctx.config.effective_history_window(),
             effort_level: Some(cc_core::effort::EffortLevel::High),
             command_queue: None,
             skill_index: None,

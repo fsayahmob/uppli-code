@@ -708,6 +708,11 @@ pub mod config {
         /// `None` falls back to `DEFAULT_LINE_LIMIT` (2000).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         pub default_read_line_limit: Option<usize>,
+        /// Minimum messages kept after the initial prompt on each turn, for
+        /// perception-action loops whose old images would otherwise be resent
+        /// every turn. `None` falls back to `DEFAULT_HISTORY_WINDOW` (all).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub history_window: Option<usize>,
         /// Max consecutive auto-compact failures before the circuit breaker
         /// disables auto-compact for the rest of the session.
         /// `None` falls back to `MAX_COMPACT_RETRIES` (3).
@@ -732,11 +737,6 @@ pub mod config {
         /// `DEFAULT_TOOL_RESULT_BUDGET` (500 000).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         pub tool_result_budget: Option<usize>,
-        /// Messages kept after the initial prompt on each turn. `None` or 0
-        /// keeps the whole history. For perception-action loops, whose old
-        /// images are useless and would otherwise be resent every turn.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        pub history_window: Option<usize>,
 
         // --- Batch 2 configurable parameters (file_read limits, sorted alphabetically) ---
         /// Cap on archive entries listed in a single FileRead invocation.
@@ -1394,6 +1394,12 @@ pub mod config {
                 .unwrap_or(crate::constants::DEFAULT_LINE_LIMIT)
         }
 
+        /// Resolve the minimum messages kept after the prompt (0 = all).
+        pub fn effective_history_window(&self) -> usize {
+            self.history_window
+                .unwrap_or(crate::constants::DEFAULT_HISTORY_WINDOW)
+        }
+
         /// Resolve the max consecutive auto-compact failures before the
         /// circuit breaker opens.
         pub fn effective_max_compact_retries(&self) -> u32 {
@@ -1423,11 +1429,6 @@ pub mod config {
         pub fn effective_tool_result_budget(&self) -> usize {
             self.tool_result_budget
                 .unwrap_or(crate::constants::DEFAULT_TOOL_RESULT_BUDGET)
-        }
-
-        /// Resolve the number of messages kept after the prompt (0 = all).
-        pub fn effective_history_window(&self) -> usize {
-            self.history_window.unwrap_or(0)
         }
 
         // --- Batch 2 effective_* helpers (file_read limits, sorted alphabetically) ---
@@ -2219,6 +2220,9 @@ pub mod constants {
     pub const DEFAULT_WEB_FETCH_TIMEOUT_SECS: u64 = 30;
 
     // --- Batch 1 configurable defaults ---
+    /// Minimum messages kept after the initial prompt on each turn. 0 keeps
+    /// the whole history.
+    pub const DEFAULT_HISTORY_WINDOW: usize = 0;
     /// Default line count when the FileRead caller omits the `limit` param.
     /// Mirrors the historical `file_read::limits::DEFAULT_LINE_LIMIT`.
     pub const DEFAULT_LINE_LIMIT: usize = 2_000;

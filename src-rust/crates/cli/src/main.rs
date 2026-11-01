@@ -502,6 +502,10 @@ struct Cli {
     #[arg(long = "default-read-line-limit", value_name = "LINES")]
     default_read_line_limit: Option<usize>,
 
+    /// Minimum messages kept after the initial prompt on each turn (default: all).
+    #[arg(long = "history-window", value_name = "MESSAGES")]
+    history_window: Option<usize>,
+
     /// Max consecutive auto-compact failures before the circuit breaker
     /// disables auto-compact for the rest of the session.
     #[arg(long = "max-compact-retries", value_name = "COUNT")]
@@ -525,10 +529,6 @@ struct Cli {
     /// results are evicted with a truncation notice.
     #[arg(long = "tool-result-budget", value_name = "CHARS")]
     tool_result_budget: Option<usize>,
-
-    /// Minimum messages kept after the initial prompt on each turn (default: all).
-    #[arg(long = "history-window", value_name = "MESSAGES")]
-    history_window: Option<usize>,
 
     // --- Batch 2 configurable parameters (file_read limits, sorted alphabetically) ---
     /// Cap on archive entries listed by Read in a single invocation.
@@ -1120,6 +1120,9 @@ async fn main() -> anyhow::Result<()> {
     if let Some(v) = cli.default_read_line_limit {
         config.default_read_line_limit = Some(v);
     }
+    if let Some(v) = cli.history_window {
+        config.history_window = Some(v);
+    }
     if let Some(v) = cli.max_compact_retries {
         config.max_compact_retries = Some(v);
     }
@@ -1134,9 +1137,6 @@ async fn main() -> anyhow::Result<()> {
     }
     if let Some(v) = cli.tool_result_budget {
         config.tool_result_budget = Some(v);
-    }
-    if let Some(v) = cli.history_window {
-        config.history_window = Some(v);
     }
 
     // --- Batch 2 wiring (file_read limits, sorted alphabetically) ---

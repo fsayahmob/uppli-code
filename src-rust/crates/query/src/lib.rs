@@ -261,7 +261,7 @@ impl Default for QueryConfig {
             thinking_budget: None,
             temperature: None,
             tool_result_budget: cc_core::constants::DEFAULT_TOOL_RESULT_BUDGET,
-            history_window: 0,
+            history_window: cc_core::constants::DEFAULT_HISTORY_WINDOW,
             effort_level: None,
             command_queue: None,
             skill_index: None,
@@ -786,7 +786,14 @@ pub async fn run_query_loop(
             }
         }
 
-        apply_history_window(messages, config.history_window);
+        let dropped = apply_history_window(messages, config.history_window);
+        if dropped > 0 {
+            debug!(
+                dropped,
+                window = config.history_window,
+                "History window applied"
+            );
+        }
 
         // Apply tool-result budget: if the cumulative size of all tool results
         // in the conversation exceeds the configured threshold, replace the
