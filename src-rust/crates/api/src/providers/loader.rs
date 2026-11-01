@@ -29,6 +29,7 @@ const BUNDLED_TOMLS: &[(&str, &str)] = &[
     ("ollama", include_str!("../../presets/ollama.toml")),
     ("openai", include_str!("../../presets/openai.toml")),
     ("glm", include_str!("../../presets/glm.toml")),
+    ("reflexe", include_str!("../../presets/reflexe.toml")),
 ];
 
 // ── Errors ────────────────────────────────────────────────────────────────
