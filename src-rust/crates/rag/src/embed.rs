@@ -12,13 +12,7 @@ static EMBEDDER: OnceLock<Mutex<TextEmbedding>> = OnceLock::new();
 fn model_cache_dir() -> PathBuf {
     std::env::var_os("FASTEMBED_CACHE_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            dirs::home_dir()
-                .unwrap_or_else(|| PathBuf::from("."))
-                .join(".uppli")
-                .join("rag")
-                .join("models")
-        })
+        .unwrap_or_else(|| crate::store::rag_dir().join("models"))
 }
 
 pub struct Embedder;
@@ -91,13 +85,28 @@ mod tests {
     #[test]
     fn init_reports_an_unreachable_model_instead_of_panicking() {
         let cache = std::env::temp_dir().join(format!("cc-rag-no-model-{}", std::process::id()));
+        let orig_cache = std::env::var_os("FASTEMBED_CACHE_DIR");
+        let orig_endpoint = std::env::var_os("HF_ENDPOINT");
         std::env::set_var("FASTEMBED_CACHE_DIR", &cache);
         std::env::set_var("HF_ENDPOINT", "http://127.0.0.1:9");
 
-        assert!(Embedder::init().is_err());
-        assert!(!Embedder::is_ready());
+        let result = Embedder::init();
+        let ready = Embedder::is_ready();
 
+        // Restore env vars
+        for (key, orig) in [
+            ("FASTEMBED_CACHE_DIR", orig_cache),
+            ("HF_ENDPOINT", orig_endpoint),
+        ] {
+            match orig {
+                Some(value) => std::env::set_var(key, value),
+                None => std::env::remove_var(key),
+            }
+        }
         let _ = std::fs::remove_dir_all(&cache);
+
+        assert!(result.is_err());
+        assert!(!ready);
     }
 
     #[test]
