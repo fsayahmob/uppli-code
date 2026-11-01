@@ -29,7 +29,7 @@ const BUNDLED_TOMLS: &[(&str, &str)] = &[
     ("ollama", include_str!("../../presets/ollama.toml")),
     ("openai", include_str!("../../presets/openai.toml")),
     ("glm", include_str!("../../presets/glm.toml")),
-    ("reflexe", include_str!("../../presets/reflexe.toml")),
+    ("reflex", include_str!("../../presets/reflex.toml")),
 ];
 
 // ── Errors ────────────────────────────────────────────────────────────────
@@ -406,6 +406,18 @@ mod tests {
             "glm must NOT declare a fast_model — switching mid-session \
              to a non-vision model would fail any tool-result containing \
              an image"
+        );
+    }
+
+    #[test]
+    fn reflex_loaded() {
+        let registry = load_all_bundled().unwrap();
+        let reflex = registry.find("reflex").expect("reflex present");
+        assert_eq!(reflex.capabilities.default_model, "nomad");
+        assert!(reflex.matches("reflexe"));
+        assert!(
+            reflex.capabilities.supports_vision,
+            "reflex models decide from images: they must reach the wire"
         );
     }
 

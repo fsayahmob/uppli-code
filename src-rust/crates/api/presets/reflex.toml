@@ -1,12 +1,9 @@
 schema_version = 1
 
-# Reflex models served locally: they receive an image and return a tool call,
-# writing no text. The OpenAI-compatible server is not part of this repository.
-
 [provider]
-name = "reflexe"
-aliases = ["reflex"]
-display_name = "Reflexe"
+name = "reflex"
+aliases = ["reflexe"]
+display_name = "Reflex"
 description = "Local reflex models: NoMaD, Pixels2Play (no key)"
 attribution = "powered by a local reflex model"
 provider_type = "openai_compat"
@@ -16,14 +13,19 @@ supports_vision = true
 
 [auth]
 env_vars = []
-keychain_key = "reflexe"
-display_label = "Reflexe"
+keychain_key = "reflex"
+display_label = "Reflex"
 required = false
 
 [defaults]
 max_tokens = 1024
 request_timeout_sec = 30
 max_retries = 0
+
+# ── Models ────────────────────────────
+# Reflex models receive an image and return a tool call, writing no text. The
+# OpenAI-compatible server is not part of this repository: --api-base points at
+# it, and it decides what each id means. No pricing: local inference is free.
 
 [[models]]
 id = "nomad"
