@@ -543,6 +543,10 @@ struct Cli {
     #[arg(long = "tool-result-budget", value_name = "CHARS")]
     tool_result_budget: Option<usize>,
 
+    /// Minimum messages kept after the initial prompt on each turn (default: all).
+    #[arg(long = "history-window", value_name = "MESSAGES")]
+    history_window: Option<usize>,
+
     // --- Batch 2 configurable parameters (file_read limits, sorted alphabetically) ---
     /// Cap on archive entries listed by Read in a single invocation.
     #[arg(long = "max-archive-members", value_name = "COUNT")]
@@ -1147,6 +1151,9 @@ async fn main() -> anyhow::Result<()> {
     }
     if let Some(v) = cli.tool_result_budget {
         config.tool_result_budget = Some(v);
+    }
+    if let Some(v) = cli.history_window {
+        config.history_window = Some(v);
     }
 
     // --- Batch 2 wiring (file_read limits, sorted alphabetically) ---

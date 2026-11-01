@@ -470,6 +470,7 @@ async fn tool_query(conn: &Conn, args: &Value) -> Result<Value, JsonRpcError> {
         thinking_budget: None,
         temperature: None,
         tool_result_budget: 0,
+        history_window: state.config.effective_history_window(),
         effort_level: Some(cc_core::effort::EffortLevel::Max),
         command_queue: None,
         skill_index: None,

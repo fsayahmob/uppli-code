@@ -732,6 +732,11 @@ pub mod config {
         /// `DEFAULT_TOOL_RESULT_BUDGET` (500 000).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         pub tool_result_budget: Option<usize>,
+        /// Messages kept after the initial prompt on each turn. `None` or 0
+        /// keeps the whole history. For perception-action loops, whose old
+        /// images are useless and would otherwise be resent every turn.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub history_window: Option<usize>,
 
         // --- Batch 2 configurable parameters (file_read limits, sorted alphabetically) ---
         /// Cap on archive entries listed in a single FileRead invocation.
@@ -1418,6 +1423,11 @@ pub mod config {
         pub fn effective_tool_result_budget(&self) -> usize {
             self.tool_result_budget
                 .unwrap_or(crate::constants::DEFAULT_TOOL_RESULT_BUDGET)
+        }
+
+        /// Resolve the number of messages kept after the prompt (0 = all).
+        pub fn effective_history_window(&self) -> usize {
+            self.history_window.unwrap_or(0)
         }
 
         // --- Batch 2 effective_* helpers (file_read limits, sorted alphabetically) ---
