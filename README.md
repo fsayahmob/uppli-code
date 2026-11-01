@@ -73,6 +73,7 @@ uppli-code is **provider-agnostic**: pick one at startup, the CLI never branches
 | Mistral | mistral-large-latest | no | no | `MISTRAL_API_KEY` |
 | OpenAI | (via `--model`) | depends | depends | `OPENAI_API_KEY` |
 | Ollama | (via `--model`) | depends | depends | none (local) |
+| Reflex (your local server) | nomad | **yes** | no | none (local) |
 
 **One provider per session.** Pick at startup, no switching mid-flight.
 
@@ -171,7 +172,7 @@ Read any common file kind through a single tool. Magic-byte sniffing wins over e
 
 ### MCP Server (SuperAgent)
 
-Run `uppli-code --mcp-server` to expose it as an MCP tool. Orchestrate from Claude Code, another uppli-code, or any MCP client. The SuperAgent pattern: a master agent pilots multiple workers.
+Run `uppli-code --mcp-server` to expose it as an MCP tool. Orchestrate from Claude Code, another uppli-code, or any MCP client. The SuperAgent pattern: a master agent pilots multiple workers. Tools from `--mcp-config` are offered to the agent.
 
 ```bash
 uppli-code --mcp-server --provider alibaba
